@@ -1,0 +1,154 @@
+
+trigger:
+    batch: true
+    branches:
+      include:
+        - master
+      exclude:
+        - users/*
+        - releases/*
+    paths:
+      exclude:
+        - azure-pipelines-android.yml
+        - azure-pipelines-wearos.yml
+        - azure-pipelines-ios.yml
+        - azure-pipelines-release-android.yml
+        - azure-pipelines-release-ios.yml
+        - azure-pipelines-autotests-android.yml
+        - azure-pipelines-autotests-ios.yml
+        - android/
+        - ios/DevOps/
+  
+  parameters:
+    - name: FortifyScan
+      default: false
+      type: boolean
+    - name: WhiteSourceScan
+      default: false
+      type: boolean
+  
+  variables:
+    BUILD_TYPE: private
+    CONFIG_SECRET: AZURE_CONFIG_SECRET
+    ENV_AUTO_TESTS: false
+    MyBuildNumber: '$(Build.BuildId)_$(Build.BuildNumber)_ios'
+  
+  jobs:
+    - job: GeneratingIPA
+      timeoutInMinutes: 240
+      dependsOn: ReleaseNotes
+      condition: succeeded()
+      pool:
+        vmImage: 'macOS-12'
+  
+      steps:
+        - checkout: self
+          persistCredentials: true
+  
+        - task: NodeTool@0
+          inputs:
+            versionSpec: '16.19.1'
+          displayName: 'Install Node'
+  
+        - script: yarn
+          workingDirectory: ''
+          displayName: 'Install yarn dependencies'
+  
+        - task: CocoaPods@0
+          displayName: "Install CocoaPods dependencies"
+          inputs:
+            workingDirectory: ios
+            forceRepoUpdate: false
+  
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: 'ReleaseNotes'
+            downloadPath: '$(agent.buildDirectory)'
+  
+        - task: InstallAppleCertificate@2
+          inputs:
+            certSecureFile: 'abc.p12'
+  
+        - task: InstallAppleProvisioningProfile@1
+          inputs:
+            provProfileSecureFile: 'abc.mobileprovision'
+  
+        - script: xcrun agvtool next-version -all
+          workingDirectory: 'ios'
+          displayName: 'Increase version number'
+  
+        - task: Xcode@5
+          displayName: "Build Mobile Application"
+          inputs:
+            actions: 'archive'
+            scheme: 'test'
+            sdk: ''
+            configuration: 'Release-azure-dev'
+            xcWorkspacePath: ios/test.xcworkspace
+            # Options: 8, 9, 10, default, specifyPath
+            xcodeVersion: default
+            # Options: nosign, default, manual, auto
+            signingOption: 'default'
+            teamID: 'XYZXYZXYZ'
+            # # useXcpretty Makes it easier to diagnose build failures
+            useXcpretty: false
+            # Package the app
+            packageApp: true
+            exportOptions: 'plist'
+            exportPath: '$(agent.buildDirectory)/output/'
+            exportMethod: 'development'
+            exportOptionsPlist: 'ios/DevOps/AdhocExportOptions.plist'
+  
+        - task: CmdLine@2
+          displayName: update version
+          inputs:
+            script: |
+              git config user.email "abc@gmail.com"
+              git config user.name "User Name"
+              git fetch origin
+              git merge origin/master
+              git add "ios/test.xcodeproj/project.pbxproj"
+              git add "ios/test/Info.plist"
+              git add "ios/testwatch/Info.plist"
+              git commit -m "Updated plist with new build version [skip ci]"
+              git push origin HEAD:master
+  
+        - script: mv '$(agent.buildDirectory)/output/test.ipa' '$(agent.buildDirectory)/output/TESTAPP$(Build.BuildNumber).ipa'
+          displayName: 'Rename ipa'
+  
+        - task: CopyFiles@2
+          displayName: copy ipa files to artifact
+          inputs:
+            SourceFolder: $(agent.buildDirectory)
+            contents: '**/*.ipa'
+            targetFolder: '$(build.artifactStagingDirectory)'
+            overWrite: true
+  
+        - task: CopyFiles@2
+          displayName: copy dSYM files to artifact
+          inputs:
+            SourceFolder: $(agent.buildDirectory)
+            contents: '**/*.dSYM/**'
+            targetFolder: '$(build.artifactStagingDirectory)/dSYM'
+            overWrite: true
+  
+        - task: PublishBuildArtifacts@1
+          inputs:
+            pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+            artifactName: 'ipas'
+            publishLocation: 'container'
+  
+        - task: AppCenterDistribute@3
+          inputs:
+            serverEndpoint: 'tes-ios-service-connection'
+            appSlug: 'ABC/TEST-Mobile-iOS'
+            appFile: '$(agent.buildDirectory)/output/*.ipa'
+            symbolsDsymFiles: '**/*.dSYM'
+            symbolsIncludeParentDirectory: false
+            releaseNotesOption: 'file'
+            releaseNotesFile: '$(agent.buildDirectory)/ReleaseNotes/release.md'
+            destinationType: 'groups'
+            distributionGroupId: 'dfdfdf05-dfdfd-dddfdf-dfdfd-dddfdfdfd'
+        
