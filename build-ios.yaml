@@ -86,7 +86,7 @@ jobs:
           scheme: 'test'
           sdk: ''
           configuration: 'Release-azure-dev'
-          xcWorkspacePath: ios/test.xcworkspace
+          xcWorkspacePath: ./ios/test.xcworkspace
           # Options: 8, 9, 10, default, specifyPath
           xcodeVersion: default
           # Options: nosign, default, manual, auto
