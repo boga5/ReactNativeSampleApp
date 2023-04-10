@@ -86,7 +86,7 @@ jobs:
           scheme: 'test'
           sdk: ''
           configuration: 'Release'
-          xcWorkspacePath: ./ios/Sample.xcworkspace
+          xcWorkspacePath: ReactNativeSampleApp/ios/Sample.xcworkspace
           # Options: 8, 9, 10, default, specifyPath
           xcodeVersion: default
           # Options: nosign, default, manual, auto
