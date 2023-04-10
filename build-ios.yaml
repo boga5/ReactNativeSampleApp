@@ -85,8 +85,8 @@ jobs:
           actions: 'archive'
           scheme: 'test'
           sdk: ''
-          configuration: 'Release-azure-dev'
-          xcWorkspacePath: ./ios/test.xcworkspace
+          configuration: 'Release'
+          xcWorkspacePath: ./ios/Sample.xcworkspace
           # Options: 8, 9, 10, default, specifyPath
           xcodeVersion: default
           # Options: nosign, default, manual, auto
